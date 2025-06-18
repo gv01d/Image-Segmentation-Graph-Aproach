@@ -25,15 +25,11 @@ Image::Image(int w, int h, int channels)
 }
 
 Image::Image(const Image &other)
-    : Image(w, h, channels)
+    : Image(other.w, other.h, other.channels)
 {
     if (other.data)
     {
-        data = (uint8_t *)STBI_MALLOC(size);
-        if (data)
-        {
-            memcpy(data, other.data, size);
-        }
+        memcpy(data, other.data, size);
     }
     else
     {
@@ -106,25 +102,25 @@ ImageFormat Image::getFileFormat(const char *filename)
     {
         if (strcmp(ext, ".png") == 0)
         {
-            return FORMAT_PNG;
+            return ImageFormat::FORMAT_PNG;
         }
         else if (strcmp(ext, ".bmp") == 0)
         {
-            return FORMAT_BMP;
+            return ImageFormat::FORMAT_BMP;
         }
         else if (strcmp(ext, ".tga") == 0)
         {
-            return FORMAT_TGA;
+            return ImageFormat::FORMAT_TGA;
         }
         else if (strcmp(ext, ".jpg") == 0 || strcmp(ext, ".jpeg") == 0)
         {
-            return FORMAT_JPG;
+            return ImageFormat::FORMAT_JPG;
         }
         else if (strcmp(ext, ".hdr") == 0)
         {
-            return FORMAT_HDR;
+            return ImageFormat::FORMAT_HDR;
         }
     }
 
-    return FORMAT_UNKNOWN;
+    return ImageFormat::FORMAT_UNKNOWN;
 }

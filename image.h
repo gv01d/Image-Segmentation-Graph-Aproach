@@ -1,3 +1,6 @@
+#ifndef IMAGE_H
+#define IMAGE_H
+
 #include <stdint.h>
 #include <cstdio>
 
@@ -29,3 +32,4 @@ struct Image
 
     ImageFormat getFileFormat(const char *filename);
 };
+#endif // IMAGE_H
