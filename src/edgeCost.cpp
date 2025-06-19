@@ -1,5 +1,5 @@
 
-#include "image/image.h"
+#include "image/image.cpp"
 
 #include <limits> // Required for std::numeric_limits
 #include <cmath>  // Required for sqrtf

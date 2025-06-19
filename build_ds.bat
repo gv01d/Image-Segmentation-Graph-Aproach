@@ -13,7 +13,7 @@ set "EXE=%DIR%%BASE%.exe"
 echo Building %FILE% with %GPP%...
 
 REM Compile the file
-"%GPP%" -fdiagnostics-color=always -g "%DIR%tinyfiledialogs.c" "%FILE%" -o "%EXE%" -lole32 -lcomdlg32 -luuid -lgdi32
+"%GPP%" -fdiagnostics-color=always -g "%DIR%src\tinyfiledialogs.c" "%FILE%" -o "%EXE%" -lole32 -lcomdlg32 -luuid -lgdi32
 
 REM Check for errors
 if errorlevel 1 (
