@@ -5,6 +5,7 @@
 #include <GLFW/glfw3.h>
 #include "../image/image.cpp"
 #include <iostream>
+#include "../tinyfiledialogs.h"
 
 // Vertex and fragment shaders
 const char *vertexShaderSrc = R"(
@@ -106,6 +107,10 @@ void createQuadVAO(float scaleX, float scaleY, GLuint &VAO, GLuint &VBO, GLuint 
     glEnableVertexAttribArray(1);
 }
 
+void createPoints(float *points, int amount)
+{
+}
+
 GLuint createShaderProgram(const char *vertexSrc, const char *fragmentSrc)
 {
     GLuint vs = createShader(GL_VERTEX_SHADER, vertexSrc);
@@ -130,7 +135,7 @@ void updateQuadVBO(float scaleX, float scaleY, GLuint VBO)
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
 }
 
-void mainLoop(GLFWwindow *window, GLuint program, GLuint texture, GLuint VAO, GLuint VBO, int imgWidth, int imgHeight, float border)
+void mainLoop(GLFWwindow *window, GLuint program, GLuint texture, GLuint VAO, GLuint VBO, float border)
 {
     glUseProgram(program);
     glUniform1i(glGetUniformLocation(program, "image"), 0);
@@ -139,7 +144,7 @@ void mainLoop(GLFWwindow *window, GLuint program, GLuint texture, GLuint VAO, GL
     {
         glfwGetFramebufferSize(window, &screenWidth, &screenHeight);
 
-        float imgAspect = (float)imgWidth / imgHeight;
+        float imgAspect = (float)mainImage->w / mainImage->h;
         float drawWidth, drawHeight;
         float emuWidth, emuHeight;
         if (screenWidth < screenHeight)
@@ -162,37 +167,83 @@ void mainLoop(GLFWwindow *window, GLuint program, GLuint texture, GLuint VAO, GL
         float Rw = emuWidth / screenWidth;
         float Rh = emuHeight / screenHeight;
 
-        float scaleX = Rw - border;
-        float scaleY = Rh - border;
+        float scaleX = Rw;
+        float scaleY = Rh;
 
         // Debug: Print only window size
-        /*
         static int lastW = 0, lastH = 0;
         if (screenWidth != lastW || screenHeight != lastH)
         {
+            std::cout << " = = = = = = = { Window Info } = = = = = = = " << std::endl;
             std::cout << "Window: " << screenWidth << "x" << screenHeight << std::endl;
             std::cout << "Image: " << drawWidth << "x" << drawHeight << std::endl;
             std::cout << "EMULATED window: " << emuWidth << "x" << emuHeight << std::endl;
             std::cout << "Rw: " << Rw << " | " << Rh << std::endl;
             std::cout << "Scale: " << scaleX << " x " << scaleY << std::endl;
-            std::cout << "border size: " << border << std::endl;
+            std::cout << "border size: " << border << std::endl
+                      << std::endl;
             lastW = screenWidth;
             lastH = screenHeight;
         }
-        */
 
         // Mouse input handling
-        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)
+        static bool justPressedLeftMouse = false;
+        int mouseState = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT);
+        if (mouseState == GLFW_PRESS && !justPressedLeftMouse)
         {
             double xpos, ypos;
             double normalizedX, normalizedY;
+            int pixelX, pixelY;
             glfwGetCursorPos(window, &xpos, &ypos);
 
-            normalizedX = ((xpos / screenWidth) - (1.0 - scaleX) / 2) / Rw;
-            normalizedY = ((ypos / screenHeight) - (1.0 - scaleY) / 2) / Rh;
+            normalizedX = ((xpos / screenWidth) - (1.0 - scaleX) / 2) / scaleX;
+            normalizedY = ((ypos / screenHeight) - (1.0 - scaleY) / 2) / scaleY;
 
-            std::cout << "Mouse pressed at: (" << normalizedX << ", " << normalizedY << ")" << std::endl;
+            // Clamp normalizedX and normalizedY to [0, 1]
+            if (normalizedX < 0.0)
+                normalizedX = 0.0;
+            if (normalizedX > 1.0)
+                normalizedX = 1.0;
+            if (normalizedY < 0.0)
+                normalizedY = 0.0;
+            if (normalizedY > 1.0)
+                normalizedY = 1.0;
+
+            pixelX = mainImage->w * normalizedX;
+            pixelY = mainImage->h * normalizedY;
+
+            std::cout << " = = = = = = = { Mouse Info } = = = = = = = " << std::endl;
+            std::cout << "Mouse just pressed at: (" << normalizedX << ", " << normalizedY << ")" << std::endl;
+            std::cout << "Scale: " << scaleX << " x " << scaleY << std::endl;
+            std::cout << "Ratio (Rw, Rh): " << Rw << ", " << Rh << std::endl;
+            std::cout << "Image pos: " << pixelX << " : " << pixelY << std::endl
+                      << std::endl;
         }
+        justPressedLeftMouse = (mouseState == GLFW_PRESS);
+
+        // Handle right mouse button to open file dialog and change texture
+        static bool justPressedRightMouse = false;
+        int rightMouseState = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT);
+        if (rightMouseState == GLFW_PRESS && !justPressedRightMouse)
+        {
+            const char *filters[] = {"*.png", "*.jpg", "*.jpeg", "*.bmp"};
+            const char *filename = tinyfd_openFileDialog(
+                "Open Image", "", 4, filters, "Image files", 0);
+            if (filename)
+            {
+                GLuint newTexture = loadTexture(filename);
+                if (newTexture)
+                {
+                    glDeleteTextures(1, &texture);
+                    texture = newTexture;
+                }
+                else
+                {
+                    std::cerr << "Failed to load image: " << filename << std::endl;
+                }
+            }
+        }
+        justPressedRightMouse = (rightMouseState == GLFW_PRESS);
 
         updateQuadVBO(scaleX, scaleY, VBO);
 
@@ -254,7 +305,7 @@ int main()
 
     GLuint program = createShaderProgram(vertexShaderSrc, fragmentShaderSrc);
 
-    mainLoop(window, program, texture, VAO, VBO, mainImage->w, mainImage->h, border);
+    mainLoop(window, program, texture, VAO, VBO, border);
 
     glfwDestroyWindow(window);
     glfwTerminate();
