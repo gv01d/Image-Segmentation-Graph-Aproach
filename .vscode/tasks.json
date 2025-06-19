@@ -7,14 +7,17 @@
             "args": [
                 "-fdiagnostics-color=always",
                 "-g",
-                "${fileDirname}\\tinyfiledialogs.c",
+                "${workspaceFolder}\\src\\tinyfiledialogs.c",
+                "${workspaceFolder}\\src\\visualisation\\glad.c",
                 "${file}",
                 "-o",
                 "${fileDirname}\\${fileBasenameNoExtension}.exe",
                 "-lole32",
                 "-lcomdlg32",
                 "-luuid",
-                "-lgdi32"
+                "-lgdi32",
+                "-lglfw3",
+                "-I${workspaceFolder}\\src\\visualisation"
             ],
             "options": {
                 "cwd": "${fileDirname}"

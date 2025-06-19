@@ -1,133 +1,91 @@
-#include "image.cpp"
-#include "edgeCost.cpp"
-#include "tinyfiledialogs.h"
+#include "src/dijkstra.cpp"
+#include "src/tinyfiledialogs.h"
 
-#include <map>     // for std::map
-#include <utility> // for std::pair
-#include <queue>   // for std::queue
-#include <set>
+// For Windows-specific functionality (ShellExecute) - Optional, but more robust
+#ifdef _WIN32
+#include <windows.h>
+#include <shellapi.h>
+#endif
 
-std::vector<int> getEdjacentVertices(int pos, int width, int height, bool useDiagonal)
+void openPhoto(const std::string &imagePath)
 {
-    std::vector<int> result;
-    int x = pos % width;
-    int y = pos / width;
-
-    if (y > 0)
+#ifdef _WIN32
+    // Windows: Use ShellExecuteW for Unicode support
+    // Convert std::string to std::wstring
+    auto s2ws = [](const std::string &str) -> std::wstring
     {
-        result.push_back(pos - width);
-        if (useDiagonal)
-        {
-            if (x > 0)
-            {
-                result.push_back(pos - width - 1);
-            }
-            if (x < width - 1)
-            {
-                result.push_back(pos - width + 1);
-            }
-        }
+        int size_needed = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), (int)str.size(), NULL, 0);
+        std::wstring wstrTo(size_needed, 0);
+        MultiByteToWideChar(CP_UTF8, 0, str.c_str(), (int)str.size(), &wstrTo[0], size_needed);
+        return wstrTo;
+    };
+    std::wstring wImagePath = s2ws(imagePath);
+    HINSTANCE result = ShellExecuteW(NULL, L"open", wImagePath.c_str(), NULL, NULL, SW_SHOWDEFAULT);
+    if ((intptr_t)result <= 32)
+    { // ShellExecute returns a value <= 32 on error
+        std::cerr << "Error: Could not open image on Windows. Error code: " << (intptr_t)result << std::endl;
+        std::cerr << "Make sure the file path is correct and a default image viewer is set." << std::endl;
     }
-    if (x > 0)
+    else
     {
-        result.push_back(pos - 1);
-    }
-    if (x < width - 1)
-    {
-        result.push_back(pos + 1);
-    }
-    if (y < height - 1)
-    {
-        result.push_back(pos + width);
-        if (useDiagonal)
-        {
-            if (x > 0)
-            {
-                result.push_back(pos + width - 1);
-            }
-            if (x < width - 1)
-            {
-                result.push_back(pos + width + 1);
-            }
-        }
+        std::cout << "Successfully launched image on Windows." << std::endl;
     }
 
-    return result;
+#elif __APPLE__
+    // macOS: Use the 'open' command
+    std::string command = "open \"" + imagePath + "\"";
+    std::cout << "Executing command: " << command << std::endl;
+    int result = system(command.c_str());
+    if (result != 0)
+    {
+        std::cerr << "Error: Could not open image on macOS. System command returned: " << result << std::endl;
+        std::cerr << "Make sure the file path is correct." << std::endl;
+    }
+    else
+    {
+        std::cout << "Successfully launched image on macOS." << std::endl;
+    }
+
+#elif __linux__
+    // Linux: Try common commands. 'xdg-open' is the most generic and recommended.
+    // Fallback to 'gnome-open', 'kde-open', or just the file path if xdg-open fails.
+    std::string command = "xdg-open \"" + imagePath + "\"";
+    std::cout << "Executing command: " << command << std::endl;
+    int result = system(command.c_str());
+    if (result != 0)
+    {
+        std::cerr << "Warning: xdg-open failed. Trying 'gnome-open'..." << std::endl;
+        command = "gnome-open \"" + imagePath + "\"";
+        result = system(command.c_str());
+        if (result != 0)
+        {
+            std::cerr << "Warning: gnome-open failed. Trying 'kde-open'..." << std::endl;
+            command = "kde-open \"" + imagePath + "\"";
+            result = system(command.c_str());
+            if (result != 0)
+            {
+                std::cerr << "Error: Could not open image on Linux using common methods. System command returned: " << result << std::endl;
+                std::cerr << "Make sure the file path is correct and a default image viewer is set (e.g., using 'xdg-mime' commands)." << std::endl;
+            }
+            else
+            {
+                std::cout << "Successfully launched image using kde-open." << std::endl;
+            }
+        }
+        else
+        {
+            std::cout << "Successfully launched image using gnome-open." << std::endl;
+        }
+    }
+    else
+    {
+        std::cout << "Successfully launched image on Linux using xdg-open." << std::endl;
+    }
+
+#else
+    std::cerr << "Unsupported operating system. Cannot automatically open photo." << std::endl;
+#endif
 }
-
-class CM
-{
-public:
-    Image image;
-    bool useDiagonal = false; // Use diagonal connections if true
-
-    std::map<int, int> seeds; // Map of seed positions to their labels
-    std::vector<int> labels;  // Labels for each pixel in the image
-    std::vector<float> costs; // costs for each pixel in the image
-    std::vector<int> parent;  // Parent pixel for each pixel in the image
-
-    std::queue<int> queue; // Queue for BFS or Dijkstra's algorithm
-
-    EdgeCost *edgeCost = nullptr; // Pointer to the edge cost function
-
-    // _________________________________________________________________________________________________________________
-    /// @brief Constructor for the CM class
-    CM(Image image, std::map<int, int> seeds, bool useDiagonal = false)
-        : image(image), useDiagonal(useDiagonal), labels(image.w * image.h, -1), costs(image.w * image.h, std::numeric_limits<float>::infinity()), parent(image.w * image.h, -1)
-    {
-        // Initialize labels based on seeds
-        for (const auto &seed : seeds)
-        {
-            if (seed.first < 0 || seed.first >= image.w * image.h)
-                continue; // Skip invalid seed positions
-
-            labels[seed.first] = seed.second;
-            costs[seed.first] = 0.0f; // Set initial cost for seed pixels
-            queue.push(seed.first);
-
-            this->seeds.insert_or_assign(seed.first, seed.second); // add seed to the map
-        }
-    }
-
-    // _________________________________________________________________________________________________________________
-    /// @brief Run the connected components algorithm using BFS or Dijkstra's algorithm
-    /// @details This function processes the queue, updating labels and costs for each pixel based on the edge cost.
-    void run()
-    {
-        while (!queue.empty())
-        {
-            int current = queue.front();
-            queue.pop();
-
-            int currentLabel = labels[current];
-            float currentCost = costs[current];
-
-            std::vector<int> neighbors = getEdjacentVertices(current, image.w, image.h, useDiagonal);
-
-            // - - - - - - - - - - - - - - - - - - - - - - - -
-            // Process each neighbor of the current pixel
-            for (int neighbor : neighbors)
-            {
-                if (neighbor < 0 || neighbor >= static_cast<int>(labels.size()))
-                    continue; // Skip out-of-bounds neighbors
-
-                if (labels[neighbor] == -1) // If the neighbor is unvisited
-                {
-                    float edgeCostValue = edgeCost ? edgeCost->getCost(current, neighbor) : 1.0f; // Default cost if no edge cost function is provided
-                    float newCost = currentCost + edgeCostValue;
-
-                    if (newCost < costs[neighbor]) // If the new cost is lower than the previous cost
-                    {
-                        costs[neighbor] = newCost;
-                        labels[neighbor] = currentLabel; // Assign the label of the current pixel to the neighbor
-                        parent[neighbor] = current;      // Set the parent of the neighbor to the current pixel
-                        queue.push(neighbor);            // Add the neighbor to the queue for further processing
-                    }
-                }
-            }
-        }
-    }
-};
 
 int xyToPos(Image image, int x, int y)
 {
