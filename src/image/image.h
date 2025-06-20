@@ -30,6 +30,9 @@ struct Image
     bool read(const char *filename);
     bool write(const char *filename);
 
+    uint8_t *getPixel(int x, int y);
+    void setPixel(int x, int y, uint8_t *data);
+
     ImageFormat getFileFormat(const char *filename);
 };
 #endif // IMAGE_H

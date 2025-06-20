@@ -1,3 +1,6 @@
+#ifndef IMAGE_CPP
+#define IMAGE_CPP
+
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image.h"
@@ -124,3 +127,32 @@ ImageFormat Image::getFileFormat(const char *filename)
 
     return ImageFormat::FORMAT_UNKNOWN;
 }
+
+uint8_t *Image::getPixel(int x, int y)
+{
+    if (!data || x < 0 || y < 0 || x >= w || y >= h)
+    {
+        return nullptr;
+    }
+
+    uint8_t *retData = (uint8_t *)malloc(channels * sizeof(uint8_t));
+    if (!retData)
+    {
+        return nullptr;
+    }
+
+    memcpy(retData, data + (y * w + x) * channels, channels);
+    return retData;
+}
+
+void Image::setPixel(int x, int y, uint8_t *pixelData)
+{
+    if (!data || !pixelData || x < 0 || y < 0 || x >= w || y >= h)
+    {
+        return;
+    }
+    uint8_t *dst = data + (y * w + x) * channels;
+    memcpy(dst, pixelData, channels);
+}
+
+#endif

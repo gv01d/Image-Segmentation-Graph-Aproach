@@ -1,5 +1,9 @@
 #include "src/dijkstra.cpp"
 #include "src/tinyfiledialogs.h"
+#include <iostream>
+#include <limits>
+#include <algorithm>
+#include "src/gradient.cpp"
 
 // For Windows-specific functionality (ShellExecute) - Optional, but more robust
 #ifdef _WIN32
@@ -94,6 +98,201 @@ int xyToPos(Image image, int x, int y)
     return y * image.w + x; // Convert (x, y) to a linear index
 }
 
+// Converte a posição linear de volta para coordenadas (x, y)
+std::pair<int, int> posToXy(int pos, int width)
+{
+
+    if (width == 0)
+        return {-1, -1};
+    return {pos % width, pos / width};
+}
+
+//---| CRUD DE SEEDS |---
+
+//--| READ |--
+
+void exibirSeeds(const std::map<int, int> &seeds, int imageWidth)
+{
+    std::cout << "\n---| Seeds Atuais |---" << std::endl;
+    if (seeds.empty())
+    {
+        std::cout << "Nenhuma seed definida." << std::endl;
+    }
+    else
+    {
+
+        for (std::map<int, int>::const_iterator it = seeds.begin(); it != seeds.end(); ++it)
+        {
+            int pos = it->first;
+            int label = it->second;
+
+            std::pair<int, int> coords = posToXy(pos, imageWidth);
+            std::cout << "Seed " << label << ": Coordenadas (" << coords.first << ", " << coords.second << ")" << std::endl;
+        }
+    }
+    std::cout << "--------------------\n"
+              << std::endl;
+}
+
+// --| CRUD |--
+void crudSeeds(std::map<int, int> &seeds, const Image &image)
+{
+    int choice = 0;
+
+    while (true)
+    {
+
+        std::cout << "\n----| CRUD de Seeds |----" << std::endl;
+        std::cout << "1. Adicionar nova seed" << std::endl;
+        std::cout << "2. Exibir seeds atuais" << std::endl;
+        std::cout << "3. Atualizar uma seed" << std::endl;
+        std::cout << "4. Remover uma seed" << std::endl;
+        std::cout << "5. Concluir e executar o algoritmo" << std::endl;
+        std::cout << "Escolha uma opcao: ";
+
+        // Validação de entrada numérica
+        while (!(std::cin >> choice))
+        {
+            std::cout << "Entrada invalida.";
+            std::cin.clear();
+            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+        }
+
+        if (choice == 5)
+        {
+            if (seeds.empty())
+            {
+                std::cout << "AVISO: Nenhuma seed foi definida." << std::endl;
+            }
+            std::cout << "Finalizando definicao de seeds" << std::endl;
+
+            return;
+        }
+
+        switch (choice)
+        {
+        // --| CREATE |--
+        case 1:
+        {
+            int x, y;
+            std::cout << "Digite a coordenada X (0-" << image.w - 1 << "): ";
+            std::cin >> x;
+            std::cout << "Digite a coordenada Y (0-" << image.h - 1 << "): ";
+            std::cin >> y;
+
+            int pos = xyToPos(image, x, y);
+            if (pos == -1)
+            {
+                std::cerr << "Erro: Coordenadas fora dos limites da imagem." << std::endl;
+            }
+            else
+            {
+
+                int newLabel = 1;
+                if (!seeds.empty())
+                {
+
+                    // Encontra o maior rótulo atual e adiciona 1
+                    auto max_it = std::max_element(seeds.begin(), seeds.end(),
+                                                   [](const auto &a, const auto &b)
+                                                   { return a.second < b.second; });
+                    newLabel = max_it->second + 1;
+                }
+                seeds[pos] = newLabel;
+                std::cout << "Seed " << newLabel << " adicionada em (" << x << ", " << y << ")." << std::endl;
+            }
+            break;
+        }
+
+        //--| READ |--
+        case 2:
+        {
+            exibirSeeds(seeds, image.w);
+            break;
+        }
+        //--| UPDATE |--
+        case 3:
+        {
+            if (seeds.empty())
+            {
+                std::cout << "Nenhuma seed para atualizar." << std::endl;
+                break;
+            }
+
+            // atualizazndo seed
+            exibirSeeds(seeds, image.w);
+            int label;
+            std::cout << "Digite o numero (label) da seed que deseja atualizar: ";
+            std::cin >> label;
+
+            auto it = std::find_if(seeds.begin(), seeds.end(),
+                                   [label](const auto &pair)
+                                   { return pair.second == label; });
+
+            if (it == seeds.end())
+            {
+                std::cerr << "Erro: Seed com label " << label << " nao encontrada." << std::endl;
+            }
+            else
+            {
+
+                int oldPos = it->first;
+                int x, y;
+                std::cout << "Digite a NOVA coordenada X: ";
+                std::cin >> x;
+                std::cout << "Digite a NOVA coordenada Y: ";
+                std::cin >> y;
+
+                int newPos = xyToPos(image, x, y);
+                if (newPos == -1)
+                {
+                    std::cerr << "Erro: Coordenadas fora dos limites." << std::endl;
+                }
+                else
+                {
+                    seeds.erase(it);
+                    seeds[newPos] = label;
+                    std::cout << "Seed " << label << " atualizada para (" << x << ", " << y << ")." << std::endl;
+                }
+            }
+            break;
+        }
+
+        //--| DELETE |--
+        case 4:
+        {
+            if (seeds.empty())
+            {
+                std::cout << "Nenhuma seed para remover." << std::endl;
+                break;
+            }
+            exibirSeeds(seeds, image.w);
+            int label;
+            std::cout << "Digite o numero (label) da seed que deseja remover: ";
+            std::cin >> label;
+
+            auto it = std::find_if(seeds.begin(), seeds.end(),
+                                   [label](const auto &pair)
+                                   { return pair.second == label; });
+
+            if (it == seeds.end())
+            {
+                std::cerr << "Erro: Seed com label " << label << " nao encontrada." << std::endl;
+            }
+            else
+            {
+                seeds.erase(it);
+                std::cout << "Seed " << label << " removida." << std::endl;
+            }
+            break;
+        }
+        default:
+            std::cout << "Opcao invalida. Tente novamente." << std::endl;
+            break;
+        }
+    }
+}
+
 const char *filters[] = {"*.png", "*.jpg", "*.bmp", "*.tga", "*.hdr"};
 
 int main()
@@ -103,7 +302,7 @@ int main()
     if (true)
     {
         text = tinyfd_openFileDialog(
-            "Select a gml file",                       // Dialog title
+            "Select a image file",                     // Dialog title
             "",                                        // Default path and/or filename
             1,                                         // Number of filter patterns
             filters,                                   // Filter patterns
@@ -112,32 +311,30 @@ int main()
         );
     }
 
+    if (!text)
+    {
+        std::cerr << "Nenhum arquivo selecionado. Encerrando." << std::endl;
+        return 1;
+    }
+
     Image image(text);                // Load an image from a file
     image.write("output\\input.png"); // Write the image to a file
 
+    Image imageGradient = gradient::generateGradient(image);
+    imageGradient.write("output\\gradient.png");
+
     // Generate 10 arbitrary seed spots based on image width and height
     std::map<int, int> seeds;
-    int w = image.w, h = image.h;
-    std::vector<std::pair<float, float>> relCoords = {
-        {0.1f, 0.1f}, //
-        {0.2f, 0.8f},
-        {0.4f, 0.3f},
-        {0.6f, 0.7f},
-        {0.8f, 0.2f},
-        {0.9f, 0.9f},
-        {0.3f, 0.6f},
-        {0.7f, 0.4f},
-        {0.5f, 0.5f},
-        {0.85f, 0.75f} //
-    };
-    for (int i = 0; i < 10; ++i)
-    {
-        int x = static_cast<int>(relCoords[i].first * (w - 1));
-        int y = static_cast<int>(relCoords[i].second * (h - 1));
-        int pos = xyToPos(image, x, y);
-        if (pos != -1)
-            seeds[pos] = i + 1;
-    }
+
+    // Força uma pausa e limpa completamente o buffer de entrada
+    std::string dummy;
+    std::cout << "\n>>> Imagem carregada. Pressione ENTER para abrir o menu de seeds <<<" << std::endl;
+    std::getline(std::cin, dummy); // Limpa qualquer sobra anterior
+    std::getline(std::cin, dummy); // Aguarda o ENTER real
+
+    // Chamando funcao de CRUD
+    std::cout << "Abrindo o CRUD " << std::endl;
+    crudSeeds(seeds, imageGradient);
 
     // Generate random colors for each seed label, ensuring they are different
     std::map<int, std::tuple<uint8_t, uint8_t, uint8_t>> labelColors;
@@ -157,10 +354,10 @@ int main()
         usedColors.insert(color);
     }
 
-    EuclidianDistance_EdgeCost edgeCost(image); // Create an edge cost object
+    EuclidianDistance_EdgeCost edgeCost(imageGradient); // Create an edge cost object
 
-    CM cm(image, seeds, true); // Create a CM object with diagonal connections
-    cm.edgeCost = &edgeCost;   // Set the edge cost function
+    CM cm(imageGradient, seeds, true); // Create a CM object with diagonal connections
+    cm.edgeCost = &edgeCost;           // Set the edge cost function
 
     // _________________________________________________________________________________________________
     // Run the connected components algorithm
