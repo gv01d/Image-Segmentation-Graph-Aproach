@@ -302,12 +302,12 @@ int main()
     if (true)
     {
         text = tinyfd_openFileDialog(
-            "Select a image file",                     // Dialog title
-            "",                                        // Default path and/or filename
-            1,                                         // Number of filter patterns
-            filters,                                   // Filter patterns
-            "image files - (png, jpg, bmp, tga, hdr)", // Optional filter description (can be NULL)
-            0                                          // Allow multiple select (0 = no)
+            "Select a image file",     // Dialog title
+            "",                        // Default path and/or filename
+            1,                         // Number of filter patterns
+            filters,                   // Filter patterns
+            "png, jpg, bmp, tga, hdr", // Optional filter description (can be NULL)
+            0                          // Allow multiple select (0 = no)
         );
     }
 

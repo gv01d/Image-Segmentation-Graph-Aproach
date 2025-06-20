@@ -3,12 +3,12 @@
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
-#include "../image/image.cpp"
+#include "src/image/image.cpp"
 #include <iostream>
 #include <vector>
-#include "../tinyfiledialogs.h"
-#include "../dijkstra.cpp"
-#include "../gradient.cpp"
+#include "src/tinyfiledialogs.h"
+#include "src/dijkstra.cpp"
+#include "src/gradient.cpp"
 
 // Vertex and fragment shaders
 const char *vertexShaderSrc = R"(
@@ -42,7 +42,29 @@ const char *pointFragmentShaderSrc = R"(
 #version 330 core
 out vec4 FragColor;
 void main() {
-    FragColor = vec4(1.0, 1.0, 1.0, 1.0); // Red with fadeout
+    // Calculate distance from center of point (gl_PointCoord is in [0,1])
+    float dist = length(gl_PointCoord - vec2(0.5));
+    float radius = 0.5;
+    float outline = 0.08; // thickness of black outline
+    float edge = 0.05;    // fadeout at the edge
+
+    // Alpha for outer edge
+    float alpha = smoothstep(radius, radius - edge, dist);
+
+    // Black outline region
+    float outlineAlpha = smoothstep(radius - outline, radius - outline - edge, dist);
+
+    // If outside the point, discard
+    if (dist > radius)
+        discard;
+
+    // If in the outline region, blend black with alpha
+    if (dist > radius - outline) {
+        FragColor = vec4(0.0, 0.0, 0.0, alpha * (1.0 - outlineAlpha));
+    } else {
+        // Inside: white, fade to black at outline
+        FragColor = vec4(1.0, 1.0, 1.0, alpha);
+    }
 }
 )";
 
@@ -172,7 +194,7 @@ void mainLoop(GLFWwindow *window, GLuint program, GLuint pointShader, GLuint tex
         glfwGetFramebufferSize(window, &screenWidth, &screenHeight);
 
         // ________________________________________________________________
-        glUseProgram(program);
+
         // --- Quad calculation and update ---
         float imgAspect = (float)mainImage->w / mainImage->h;
         float drawWidth, drawHeight;
@@ -219,6 +241,7 @@ void mainLoop(GLFWwindow *window, GLuint program, GLuint pointShader, GLuint tex
         // --- Quad update and render ---
         auto updateAndRenderQuad = [&](float scaleX, float scaleY, GLuint VBO, GLuint VAO, GLuint program, GLuint texture)
         {
+            glUseProgram(program);
             updateQuadVBO(scaleX, scaleY, VBO);
             glClear(GL_COLOR_BUFFER_BIT);
             glActiveTexture(GL_TEXTURE0);
@@ -227,43 +250,6 @@ void mainLoop(GLFWwindow *window, GLuint program, GLuint pointShader, GLuint tex
             glBindVertexArray(VAO);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         };
-
-        /*
-        // Mouse input handling
-        static bool justPressedLeftMouse = false;
-        int mouseState = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT);
-        if (mouseState == GLFW_PRESS && !justPressedLeftMouse)
-        {
-            double xpos, ypos;
-            double normalizedX, normalizedY;
-            int pixelX, pixelY;
-            glfwGetCursorPos(window, &xpos, &ypos);
-
-            normalizedX = ((xpos / screenWidth) - (1.0 - scaleX) / 2) / scaleX;
-            normalizedY = ((ypos / screenHeight) - (1.0 - scaleY) / 2) / scaleY;
-
-            // Clamp normalizedX and normalizedY to [0, 1]
-            if (normalizedX < 0.0)
-            normalizedX = 0.0;
-            if (normalizedX > 1.0)
-            normalizedX = 1.0;
-            if (normalizedY < 0.0)
-            normalizedY = 0.0;
-            if (normalizedY > 1.0)
-            normalizedY = 1.0;
-
-            pixelX = mainImage->w * normalizedX;
-            pixelY = mainImage->h * normalizedY;
-
-            std::cout << " = = = = = = = { Mouse Info } = = = = = = = " << std::endl;
-            std::cout << "Mouse just pressed at: (" << normalizedX << ", " << normalizedY << ")" << std::endl;
-            std::cout << "Scale: " << scaleX << " x " << scaleY << std::endl;
-            std::cout << "Ratio (Rw, Rh): " << Rw << ", " << Rh << std::endl;
-            std::cout << "Image pos: " << pixelX << " : " << pixelY << std::endl
-            << std::endl;
-        }
-        justPressedLeftMouse = (mouseState == GLFW_PRESS);
-        */
 
         // ________________________________________________________________
         // --- Points editing and rendering ---
@@ -328,7 +314,8 @@ void mainLoop(GLFWwindow *window, GLuint program, GLuint pointShader, GLuint tex
             // Render points
             if (pointsInitialized && !points.empty())
             {
-                glPointSize(8.0f);
+                glUseProgram(pointShader);
+                glPointSize(12.0f);
                 glBindVertexArray(pointsVAO);
                 glDrawArrays(GL_POINTS, 0, points.size() / 2);
             }
@@ -364,7 +351,7 @@ void mainLoop(GLFWwindow *window, GLuint program, GLuint pointShader, GLuint tex
 
         // _____________________________________________________________________________________________
         // .
-        // Detect if Enter key was pressed
+        // Detect if Enter key was pressed to run image segmentation
         static bool justPressedEnter = false;
         int enterState = glfwGetKey(window, GLFW_KEY_ENTER);
         if (enterState == GLFW_PRESS && !justPressedEnter)
@@ -376,8 +363,7 @@ void mainLoop(GLFWwindow *window, GLuint program, GLuint pointShader, GLuint tex
             imageGradient.write("output\\gradient.png");
 
             std::map<int, int> seeds;
-            // imgPoint contains [x0, y0, x1, y1, ...] in mainImage coordinates
-            // We need to map them to gradientImage coordinates (may differ in size)
+
             for (size_t i = 0, label = 1; i + 1 < imgPoint.size(); i += 2, ++label)
             {
                 int x = imgPoint[i];
@@ -479,7 +465,7 @@ int main()
     if (!window)
         return -1;
 
-    GLuint texture = loadTexture("inhego.png");
+    GLuint texture = loadTexture("random.jpg");
     if (!texture)
     {
         std::cerr << "Failed to load image\n";
@@ -518,7 +504,7 @@ int main()
     GLuint program = createShaderProgram(vertexShaderSrc, fragmentShaderSrc);
     GLuint points = createShaderProgram(pointVertexShaderSrc, pointFragmentShaderSrc);
 
-    mainLoop(window, program, points, texture, VAO, VBO, border, "inhego.png");
+    mainLoop(window, program, points, texture, VAO, VBO, border, "random.jpg");
 
     glfwDestroyWindow(window);
     glfwTerminate();
